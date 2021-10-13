@@ -20,7 +20,7 @@ You can also customize the process to be Hosted using the TargetProcess property
 
 ## Contributors
 - Destroyer : Creator and Developer.  / Discord : Destroyer#8328 
-- Harold : He suggests this function, and I implement it, so it was his Idea or something ... / Discord : PinkAxol#9856
+- PinkAxol : He suggests this function, and I implement it, so it was his Idea or something ... / Discord : PinkAxol#9856
 
   ## Special thanks :
 - [ElektroStudios](https://github.com/ElektroStudios): For its Class SetWindowState and other Functions.
