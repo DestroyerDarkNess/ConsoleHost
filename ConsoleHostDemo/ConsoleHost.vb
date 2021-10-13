@@ -88,6 +88,8 @@ Public Class ConsoleHost : Inherits Panel
 
             Dim hwnd As IntPtr = GetConsoleWindow()
 
+            Debug.WriteLine("GetConsoleWindow = " & hwnd.ToString)
+
             If hwnd = IntPtr.Zero Then
 
                 Dim Proc As New System.Diagnostics.Process
@@ -102,7 +104,11 @@ Public Class ConsoleHost : Inherits Panel
 
                 ProcessEx = Proc
 
+                Debug.WriteLine("GetConsoleWindow Failed!")
+                Debug.WriteLine("Helper CMD Host Loaded ")
+
             Else
+                Debug.WriteLine("GetConsoleWindow Has been loaded!")
                 Loaded = SetByHandle(hwnd)
             End If
         Else
@@ -126,14 +132,17 @@ Public Class ConsoleHost : Inherits Panel
             Dim Limit As Integer = 0
             For i As Integer = 0 To 2
 
-                If SetParent(Proc_MainWindowHandle, Me.Handle) <> IntPtr.Zero Then
+                Dim SetParentHandle As IntPtr = SetParent(Proc_MainWindowHandle, Me.Handle)
+                Debug.WriteLine("SetParentHandle = " & SetParentHandle.ToString)
+
+                If SetParentHandle <> IntPtr.Zero Then
                     SetWindowPos(Proc_MainWindowHandle, New IntPtr(HWND_BOTTOM), 0, 0, 0, 0, 1)
                     SetCorrectParent = True
                 End If
 
                 If SetCorrectParent = True Then
                     Dim placement As WINDOWPLACEMENT = GetPlacement(Proc_MainWindowHandle)
-
+                    Debug.WriteLine("placement = " & placement.showCmd.ToString)
                     If placement.showCmd.ToString = "Normal" Then
                         Dim FakeFullSc As Boolean = FullScreenEmulation(Proc_MainWindowHandle)
                         Procede = True
@@ -141,6 +150,7 @@ Public Class ConsoleHost : Inherits Panel
 
                     If Procede = True Then
                         Limit += 1
+                        Debug.WriteLine(" Limit = " & Limit.ToString)
                         If placement.showCmd.ToString = "Maximized" Then
                             Dim FakeFullSc As Boolean = FullScreenEmulation(Proc_MainWindowHandle)
                             ShowWindow(Proc_MainWindowHandle, SW_SHOWNOACTIVATE)
@@ -153,8 +163,10 @@ Public Class ConsoleHost : Inherits Panel
                 System.Windows.Forms.Application.DoEvents()
                 i -= 1
             Next
+            Debug.WriteLine("CosoleHost Loaded!")
             Return True
         Catch ex As Exception
+            Debug.WriteLine("CosoleHost Error: " & ex.Message)
             Return False
         End Try
     End Function
@@ -165,15 +177,17 @@ Public Class ConsoleHost : Inherits Panel
             Dim Procede As Boolean = False
             Dim Limit As Integer = 0
             For i As Integer = 0 To 2
+                Dim SetParentHandle As IntPtr = SetParent(Proc.MainWindowHandle, Me.Handle)
+                Debug.WriteLine("SetParentHandle = " & SetParentHandle.ToString)
 
-                If SetParent(Proc.MainWindowHandle, Me.Handle) <> IntPtr.Zero Then
+                If SetParentHandle <> IntPtr.Zero Then
                     SetWindowPos(Proc.MainWindowHandle, New IntPtr(HWND_BOTTOM), 0, 0, 0, 0, 1)
                     SetCorrectParent = True
                 End If
 
                 If SetCorrectParent = True Then
                     Dim placement As WINDOWPLACEMENT = GetPlacement(Proc.MainWindowHandle)
-
+                    Debug.WriteLine("placement = " & placement.showCmd.ToString)
                     If placement.showCmd.ToString = "Normal" Then
                         Dim FakeFullSc As Boolean = FullScreenEmulation(Proc.MainWindowHandle)
                         Procede = True
@@ -181,6 +195,7 @@ Public Class ConsoleHost : Inherits Panel
 
                     If Procede = True Then
                         Limit += 1
+                        Debug.WriteLine(" Limit = " & Limit.ToString)
                         If placement.showCmd.ToString = "Maximized" Then
                             Dim FakeFullSc As Boolean = FullScreenEmulation(Proc.MainWindowHandle)
                             ShowWindow(Proc.MainWindowHandle, SW_SHOWNOACTIVATE)
@@ -193,8 +208,10 @@ Public Class ConsoleHost : Inherits Panel
                 System.Windows.Forms.Application.DoEvents()
                 i -= 1
             Next
+            Debug.WriteLine("CosoleHost Loaded!")
             Return True
         Catch ex As Exception
+            Debug.WriteLine("CosoleHost Error: " & ex.Message)
             Return False
         End Try
     End Function
@@ -246,7 +263,7 @@ Public Class ConsoleHost : Inherits Panel
     End Function
 
     <Serializable>
-    <StructLayout(LayoutKind.Sequential)>
+                                   <StructLayout(LayoutKind.Sequential)>
     Friend Structure WINDOWPLACEMENT
         Public length As Integer
         Public flags As Integer
@@ -304,7 +321,7 @@ Namespace Win32.Helpers
             ''' If this parameter is NULL, all window names match.</param>
             ''' <returns>If the function succeeds, the return value is a handle to the window that has the specified class name and window name.
             ''' If the function fails, the return value is NULL.</returns>
-            <DllImport("user32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
+                                       <DllImport("user32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
             Friend Shared Function FindWindow(
                ByVal lpClassName As String,
                ByVal lpWindowName As String
@@ -339,7 +356,7 @@ Namespace Win32.Helpers
             ''' If the function succeeds, the return value is a handle to the window that has the specified class and window names.
             ''' If the function fails, the return value is NULL.
             ''' </returns>
-            <DllImport("User32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
+                                           <DllImport("User32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
             Friend Shared Function FindWindowEx(
                ByVal hwndParent As IntPtr,
                ByVal hwndChildAfter As IntPtr,
@@ -360,7 +377,7 @@ Namespace Win32.Helpers
             ''' otherwise, it does not.
             ''' </param>
             ''' <returns>The identifier of the thread that created the window.</returns>
-            <DllImport("user32.dll")>
+                                               <DllImport("user32.dll")>
             Friend Shared Function GetWindowThreadProcessId(
                 ByVal hWnd As IntPtr,
                 ByRef ProcessId As Integer
@@ -597,7 +614,7 @@ Namespace Win32.Helpers
             ''' If this parameter is NULL, all window names match.</param>
             ''' <returns>If the function succeeds, the return value is a handle to the window that has the specified class name and window name.
             ''' If the function fails, the return value is NULL.</returns>
-            <DllImport("user32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
+                                                                               <DllImport("user32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
             Friend Shared Function FindWindow(
                ByVal lpClassName As String,
                ByVal lpWindowName As String
@@ -632,7 +649,7 @@ Namespace Win32.Helpers
             ''' If the function succeeds, the return value is a handle to the window that has the specified class and window names.
             ''' If the function fails, the return value is NULL.
             ''' </returns>
-            <DllImport("User32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
+                                                                                   <DllImport("User32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
             Friend Shared Function FindWindowEx(
                ByVal hwndParent As IntPtr,
                ByVal hwndChildAfter As IntPtr,
@@ -653,7 +670,7 @@ Namespace Win32.Helpers
             ''' otherwise, it does not.
             ''' </param>
             ''' <returns>The identifier of the thread that created the window.</returns>
-            <DllImport("user32.dll")>
+                                                                                       <DllImport("user32.dll")>
             Friend Shared Function GetWindowThreadProcessId(
                 ByVal hWnd As IntPtr,
                 ByRef ProcessId As Integer
@@ -667,7 +684,7 @@ Namespace Win32.Helpers
             ''' <param name="hwnd">A handle to the window.</param>
             ''' <param name="nCmdShow">Controls how the window is to be shown.</param>
             ''' <returns><c>true</c> if the function succeeds, <c>false</c> otherwise.</returns>
-            <DllImport("User32", SetLastError:=False)>
+                                                                                           <DllImport("User32", SetLastError:=False)>
             Friend Shared Function ShowWindow(
                ByVal hwnd As IntPtr,
                ByVal nCmdShow As WindowState
