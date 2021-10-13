@@ -1,0 +1,10 @@
+c:\users\s4lsalsoft\documents\visual studio 2015\Projects\ConsoleHostDemo\ConsoleHostDemo\bin\Debug\ConsoleHostDemo.exe.config
+c:\users\s4lsalsoft\documents\visual studio 2015\Projects\ConsoleHostDemo\ConsoleHostDemo\bin\Debug\ConsoleHostDemo.exe
+c:\users\s4lsalsoft\documents\visual studio 2015\Projects\ConsoleHostDemo\ConsoleHostDemo\bin\Debug\ConsoleHostDemo.pdb
+c:\users\s4lsalsoft\documents\visual studio 2015\Projects\ConsoleHostDemo\ConsoleHostDemo\bin\Debug\ConsoleHostDemo.xml
+c:\users\s4lsalsoft\documents\visual studio 2015\Projects\ConsoleHostDemo\ConsoleHostDemo\obj\Debug\ConsoleHostDemo.Resources.resources
+c:\users\s4lsalsoft\documents\visual studio 2015\Projects\ConsoleHostDemo\ConsoleHostDemo\obj\Debug\ConsoleHostDemo.vbproj.GenerateResource.Cache
+c:\users\s4lsalsoft\documents\visual studio 2015\Projects\ConsoleHostDemo\ConsoleHostDemo\obj\Debug\ConsoleHostDemo.exe
+c:\users\s4lsalsoft\documents\visual studio 2015\Projects\ConsoleHostDemo\ConsoleHostDemo\obj\Debug\ConsoleHostDemo.xml
+c:\users\s4lsalsoft\documents\visual studio 2015\Projects\ConsoleHostDemo\ConsoleHostDemo\obj\Debug\ConsoleHostDemo.pdb
+c:\users\s4lsalsoft\documents\visual studio 2015\Projects\ConsoleHostDemo\ConsoleHostDemo\obj\Debug\ConsoleHostDemo.Form1.resources
