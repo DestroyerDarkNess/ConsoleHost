@@ -1,9 +1,11 @@
 # ConsoleHost
-ConsoleHost control / Embed Console In Winform Project
+ConsoleHost control / Embed Console In Winform Project .
+Remember to leave your Star to the Project! Thank you!
 
 ## Introduction
 ControlHost allows you to enter a console as if it were a Winform control.
 By default it loads a basic console. If the load fails, The plugin loads a HOST CMD.
+
 You can also customize the process to be Hosted using the TargetProcess property of the control.
 
 ## Preview
