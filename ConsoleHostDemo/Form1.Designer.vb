@@ -47,9 +47,9 @@ Partial Class Form1
         '
         'Button1
         '
-        Me.Button1.Location = New System.Drawing.Point(702, 434)
+        Me.Button1.Location = New System.Drawing.Point(690, 434)
         Me.Button1.Name = "Button1"
-        Me.Button1.Size = New System.Drawing.Size(58, 26)
+        Me.Button1.Size = New System.Drawing.Size(70, 26)
         Me.Button1.TabIndex = 3
         Me.Button1.Text = "Send"
         Me.Button1.UseVisualStyleBackColor = True
@@ -58,7 +58,7 @@ Partial Class Form1
         '
         Me.Button2.Location = New System.Drawing.Point(766, 434)
         Me.Button2.Name = "Button2"
-        Me.Button2.Size = New System.Drawing.Size(92, 26)
+        Me.Button2.Size = New System.Drawing.Size(80, 26)
         Me.Button2.TabIndex = 4
         Me.Button2.Text = "TestClolor"
         Me.Button2.UseVisualStyleBackColor = True
