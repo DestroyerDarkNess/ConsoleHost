@@ -1,5 +1,5 @@
 # ConsoleHost
-ConsoleHost control / Embeded Console in your Winform Proyect
+ConsoleHost control / Embed Console In Winform Project
 
 ## Introduction
 ControlHost allows you to enter a console as if it were a Winform control.
