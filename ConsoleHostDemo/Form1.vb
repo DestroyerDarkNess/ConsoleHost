@@ -12,20 +12,24 @@ Public Class Form1
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
 
         ' //////////////////////////////////////////////////////////////// CMD Host Process
-        ' Dim Proc As New System.Diagnostics.Process
-        ' Proc.StartInfo.WindowStyle = ProcessWindowStyle.Normal
-        ' Proc.StartInfo.CreateNoWindow = False
-        ' Proc.StartInfo.UseShellExecute = True
-        ' Proc.StartInfo.FileName = "cmd.exe"
-        ' Proc.StartInfo.Arguments = "/k @echo off & Title ConsoleHost & cls & pause >nul"
-        ' Proc.Start()
+        '  Dim Proc As New System.Diagnostics.Process
+        '  Proc.StartInfo.WindowStyle = ProcessWindowStyle.Normal
+        '  Proc.StartInfo.CreateNoWindow = False
+        '  Proc.StartInfo.UseShellExecute = True
+        '  Proc.StartInfo.FileName = "cmd.exe"
+        '  Proc.StartInfo.Arguments = "/k @echo off & Title ConsoleHost & cls & pause >nul"
+        '  Proc.Start()
         ' //////////////////////////////////////////////////////////////// CMD Host Process
 
+
         ConsoleHost1.Initialize() ' Or ConsoleHost1.Initialize(Proc) for other Program, example : CMD.EXE
+
 
         '   If you can't write to the console, then use the insecure startup method:
 
         '   ConsoleHost1.Unsecure_Initialize()
+        ' Or
+        '   ConsoleHost1.Unsecure_InitializeV2()
 
         If ConsoleHost1.TargetProcess IsNot Nothing Then Me.Text = "Console :" & ConsoleHost1.TargetProcess.ProcessName
 
@@ -94,7 +98,11 @@ Public Class Form1
     End Sub
 
     Private Sub Form1_Closed(sender As Object, e As EventArgs) Handles Me.Closed
-        If ConsoleHost1.TargetProcess IsNot Nothing Then ConsoleHost1.TargetProcess.Kill()
+        Try
+            If ConsoleHost1.TargetProcess IsNot Nothing Then ConsoleHost1.TargetProcess.Kill()
+        Catch ex As Exception
+            Debug.WriteLine(ex.Message)
+        End Try
     End Sub
 
     ' For External Cosoles, like cmd :

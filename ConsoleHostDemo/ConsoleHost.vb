@@ -1,4 +1,5 @@
-﻿Imports System.ComponentModel
+﻿Imports System.CodeDom.Compiler
+Imports System.ComponentModel
 Imports System.IO
 Imports System.Runtime.InteropServices
 Imports System.Text
@@ -8,8 +9,8 @@ Public Class ConsoleHost : Inherits Panel
 
 #Region " Pinvoke "
 
-    <DllImport("kernel32.dll")>
-    Private Shared Function AllocConsole() As Boolean
+    <DllImport("kernel32.dll", EntryPoint:="AllocConsole", SetLastError:=True, CharSet:=CharSet.Auto, CallingConvention:=CallingConvention.StdCall)>
+    Private Shared Function AllocConsole() As Integer
     End Function
 
     <DllImport("kernel32", SetLastError:=True)>
@@ -133,6 +134,7 @@ Public Class ConsoleHost : Inherits Panel
 
         If ProcessEx Is Nothing Then
 
+            FreeConsole()
             AllocConsole()
 
             Dim hwnd As IntPtr = GetConsoleWindow()
@@ -162,6 +164,7 @@ Public Class ConsoleHost : Inherits Panel
                 HandleEx = hwnd
                 Loaded = SetByHandle(hwnd)
             End If
+
         Else
 
             HandleEx = TargetProcess.MainWindowHandle
@@ -183,10 +186,15 @@ Public Class ConsoleHost : Inherits Panel
     Public Function Unsecure_Initialize() As Boolean
         Try
 
+            FreeConsole()
             AllocConsole()
 
             Dim hwnd As IntPtr = GetConsoleWindow()
             HandleEx = hwnd
+
+            If hwnd = IntPtr.Zero Then
+                Throw New Exception("GetConsoleWindow Failed!")
+            End If
 
             Dim stdHandle As IntPtr = GetStdHandle(STD_OUTPUT_HANDLE)
             Dim safeFileHandle As SafeFileHandle = New SafeFileHandle(stdHandle, True)
@@ -198,6 +206,32 @@ Public Class ConsoleHost : Inherits Panel
             Console.SetOut(standardOutput)
             ManualWriterEx = standardOutput
             Debug.WriteLine("GetConsoleWindow = " & hwnd.ToString)
+
+            Dim Embed As Boolean = SetByHandle(hwnd)
+
+            Dim Asynctask As New Task(New Action(Async Sub()
+                                                     Dim Seconds As Integer = 1
+                                                     System.Threading.Thread.Sleep(500)
+                                                     UpdateWindowEx()
+                                                 End Sub), TaskCreationOptions.PreferFairness)
+            Asynctask.Start()
+
+            Return Embed
+        Catch ex As Exception
+            Debug.WriteLine("Unsecure_Initialize = " & ex.Message.ToString)
+            Return False
+        End Try
+    End Function
+
+    Public Function Unsecure_InitializeV2() As Boolean
+        Try
+            FreeConsole()
+            Dim hwnd As IntPtr = ConsoleWindows.Show(ManualWriterEx)
+            HandleEx = hwnd
+
+            If hwnd = IntPtr.Zero Then
+                Throw New Exception("GetConsoleWindow Failed!")
+            End If
 
             Dim Embed As Boolean = SetByHandle(hwnd)
 
@@ -270,8 +304,6 @@ Public Class ConsoleHost : Inherits Panel
             Return False
         End Try
     End Function
-
-
 
     Private Function SetByProcess(ByVal Proc As Process)
         Try
@@ -391,6 +423,195 @@ Public Class ConsoleHost : Inherits Panel
 #End Region
 
 End Class
+
+
+Class ConsoleWindows
+
+#Region " Pinvoke"
+
+    <DllImport("kernel32.dll", EntryPoint:="GetStdHandle", SetLastError:=True, CharSet:=CharSet.Auto, CallingConvention:=CallingConvention.StdCall)>
+    Private Shared Function GetStdHandle(ByVal nStdHandle As Integer) As IntPtr
+    End Function
+
+    <DllImport("kernel32.dll", EntryPoint:="AllocConsole", SetLastError:=True, CharSet:=CharSet.Auto, CallingConvention:=CallingConvention.StdCall)>
+    Private Shared Function AllocConsole() As Integer
+    End Function
+
+    <DllImport("kernel32.dll", CharSet:=CharSet.Unicode, CallingConvention:=CallingConvention.StdCall, SetLastError:=True)>
+    Protected Shared Function FreeConsole() As Boolean
+    End Function
+
+    <DllImport("kernel32.dll")>
+    Public Shared Function GetConsoleWindow() As IntPtr
+    End Function
+
+    <DllImport("kernel32.dll")>
+    Public Shared Function SetConsoleScreenBufferSize(ByVal hConsoleOutput As IntPtr, ByVal size As COORD) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Public Shared Function ShowWindow(ByVal hWnd As System.IntPtr, ByVal cmdShow As Integer) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Public Shared Function MoveWindow(ByVal hWnd As IntPtr, ByVal X As Integer, ByVal Y As Integer, ByVal nWidth As Integer, ByVal nHeight As Integer, ByVal bRepaint As Boolean) As Boolean
+    End Function
+
+
+    <DllImport("kernel32.dll")>
+    Private Shared Function SetStdHandle(ByVal nStdHandle As StdHandle, ByVal hHandle As IntPtr) As Boolean
+    End Function
+
+    <DllImport("kernel32.dll", SetLastError:=True, CharSet:=CharSet.Auto)>
+    Private Shared Function CreateFile(ByVal lpFileName As String,
+    <MarshalAs(UnmanagedType.U4)> ByVal dwDesiredAccess As DesiredAccess,
+    <MarshalAs(UnmanagedType.U4)> ByVal dwShareMode As FileShare, ByVal lpSecurityAttributes As IntPtr,
+    <MarshalAs(UnmanagedType.U4)> ByVal dwCreationDisposition As FileMode,
+    <MarshalAs(UnmanagedType.U4)> ByVal dwFlagsAndAttributes As FileAttributes, ByVal hTemplateFile As IntPtr) As IntPtr
+    End Function
+
+#End Region
+
+#Region " Struture / Enum "
+
+    Public Structure COORD
+        Public X As Short
+        Public Y As Short
+    End Structure
+
+    Private Enum StdHandle As Integer
+        Input = -10
+        Output = -11
+        [Error] = -12
+    End Enum
+
+    <Flags>
+    Private Enum DesiredAccess As Integer
+        GenericRead = &H80000000
+        GenericWrite = &H40000000
+        GenericExecute = &H20000000
+        GenericAll = &H10000000
+    End Enum
+
+#End Region
+
+#Region " Const "
+
+    Private Const STD_OUTPUT_HANDLE As Integer = -11
+    Private Const STD_ERROR_HANDLE As Integer = -12
+    Private Const MY_CODE_PAGE As Integer = 437
+
+    Private Shared ReadOnly InvalidHandleValue As IntPtr = New IntPtr(-1)
+
+#End Region
+
+#Region " Public Methods "
+
+    Public Shared Sub Hide()
+        FreeConsole()
+    End Sub
+
+    Public Shared Function Show(ByRef Optional StreamW As StreamWriter = Nothing, ByVal Optional bufferWidth As Integer = -1, ByVal Optional breakRedirection As Boolean = True, ByVal Optional bufferHeight As Integer = 1600, ByVal Optional screenNum As Integer = -1) As IntPtr
+        AllocConsole()
+        Dim stdIn, stdErr As IntPtr, stdOut As IntPtr = InvalidHandleValue
+        If breakRedirection Then UnredirectConsole(stdOut, stdIn, stdErr)
+        Dim outStream = TryCast(Console.OpenStandardOutput(), Stream)
+        Dim errStream = TryCast(Console.OpenStandardError(), Stream)
+        Dim encoding As Encoding = System.Text.Encoding.GetEncoding(MY_CODE_PAGE)
+        Dim standardOutput As StreamWriter = New StreamWriter(outStream, encoding), standardError As StreamWriter = New StreamWriter(errStream, encoding)
+        Dim screen As System.Windows.Forms.Screen = Nothing
+
+        If StreamW IsNot Nothing Then StreamW = standardOutput
+
+        Try
+
+            If screenNum < 0 Then
+                screen = System.Windows.Forms.Screen.AllScreens.Where(Function(s) Not s.Primary).FirstOrDefault()
+            Else
+                screen = System.Windows.Forms.Screen.AllScreens(Math.Min(screenNum, System.Windows.Forms.Screen.AllScreens.Count() - 1))
+            End If
+
+        Catch e As Exception
+        End Try
+
+        If bufferWidth = -1 Then
+
+            If screen Is Nothing Then
+                bufferWidth = 180
+            Else
+                bufferWidth = screen.WorkingArea.Width / 10
+
+                If bufferWidth > 15 Then
+                    bufferWidth -= 5
+                Else
+                    bufferWidth = 10
+                End If
+            End If
+        End If
+
+        Try
+            standardOutput.AutoFlush = True
+            standardError.AutoFlush = True
+            Console.SetOut(standardOutput)
+            Console.SetError(standardError)
+
+            If breakRedirection Then
+                Dim coord = New COORD()
+                coord.X = CShort(bufferWidth)
+                coord.Y = CShort(bufferHeight)
+                SetConsoleScreenBufferSize(stdOut, coord)
+            Else
+                Console.SetBufferSize(bufferWidth, bufferHeight)
+            End If
+
+        Catch e As Exception
+            Debug.WriteLine(e.ToString())
+        End Try
+
+        Try
+
+            Dim hConsole As IntPtr = GetConsoleWindow()
+
+            Return hConsole
+
+        Catch e As Exception
+            Debug.WriteLine(e.ToString())
+        End Try
+    End Function
+
+    Public Shared Sub Maximize()
+        Dim p As Process = Process.GetCurrentProcess()
+        ShowWindow(p.MainWindowHandle, 3)
+    End Sub
+
+    Public Shared Sub UnredirectConsole(<Out> ByRef stdOut As IntPtr, <Out> ByRef stdIn As IntPtr, <Out> ByRef stdErr As IntPtr)
+        SetStdHandle(StdHandle.Output, stdOut = GetConsoleStandardOutput())
+        SetStdHandle(StdHandle.Input, stdIn = GetConsoleStandardInput())
+        SetStdHandle(StdHandle.Error, stdErr = GetConsoleStandardError())
+    End Sub
+
+    Private Shared Function GetConsoleStandardInput() As IntPtr
+        Dim handle = CreateFile("CONIN$", DesiredAccess.GenericRead Or DesiredAccess.GenericWrite, FileShare.ReadWrite, IntPtr.Zero, FileMode.Open, FileAttributes.Normal, IntPtr.Zero)
+        If handle = InvalidHandleValue Then Return InvalidHandleValue
+        Return handle
+    End Function
+
+    Private Shared Function GetConsoleStandardOutput() As IntPtr
+        Dim handle = CreateFile("CONOUT$", DesiredAccess.GenericWrite Or DesiredAccess.GenericWrite, FileShare.ReadWrite, IntPtr.Zero, FileMode.Open, FileAttributes.Normal, IntPtr.Zero)
+        If handle = InvalidHandleValue Then Return InvalidHandleValue
+        Return handle
+    End Function
+
+    Private Shared Function GetConsoleStandardError() As IntPtr
+        Dim handle = CreateFile("CONERR$", DesiredAccess.GenericWrite Or DesiredAccess.GenericWrite, FileShare.ReadWrite, IntPtr.Zero, FileMode.Open, FileAttributes.Normal, IntPtr.Zero)
+        If handle = InvalidHandleValue Then Return InvalidHandleValue
+        Return handle
+    End Function
+
+#End Region
+
+End Class
+
 
 Namespace Win32.Helpers
 

@@ -70,7 +70,7 @@ Partial Class Form1
         Me.ConsoleHost1.ForeColor = System.Drawing.Color.White
         Me.ConsoleHost1.Location = New System.Drawing.Point(0, 0)
         Me.ConsoleHost1.Name = "ConsoleHost1"
-        Me.ConsoleHost1.Size = New System.Drawing.Size(858, 434)
+        Me.ConsoleHost1.Size = New System.Drawing.Size(858, 428)
         Me.ConsoleHost1.TabIndex = 0
         '
         'Form1
