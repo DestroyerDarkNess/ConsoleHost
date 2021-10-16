@@ -1,4 +1,8 @@
-﻿Imports System.Runtime.InteropServices
+﻿Imports System.ComponentModel
+Imports System.IO
+Imports System.Runtime.InteropServices
+Imports System.Text
+Imports Microsoft.Win32.SafeHandles
 
 Public Class ConsoleHost : Inherits Panel
 
@@ -28,6 +32,10 @@ Public Class ConsoleHost : Inherits Panel
     Private Shared Function FreeConsole() As Boolean
     End Function
 
+    <DllImport("kernel32.dll", EntryPoint:="GetStdHandle", SetLastError:=True, CharSet:=CharSet.Auto, CallingConvention:=CallingConvention.StdCall)>
+    Private Shared Function GetStdHandle(ByVal nStdHandle As Integer) As IntPtr
+    End Function
+
     'SetParent
 
     <DllImport("user32.dll", EntryPoint:="SetParent")>
@@ -44,7 +52,37 @@ Public Class ConsoleHost : Inherits Panel
 
 #End Region
 
+#Region " Fix White Bar Console "
+
+    <DllImport("user32.dll")>
+    Private Shared Function UpdateWindow(ByVal hWnd As IntPtr) As Boolean
+    End Function
+
+    <System.Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function SendMessage(hWnd As IntPtr, wMsg As UInteger, wParam As UIntPtr, lParam As IntPtr) As Integer
+    End Function
+
+    <DllImport("user32")>
+    Public Shared Function ShowScrollBar(ByVal hWnd As System.IntPtr, ByVal wBar As Integer, ByVal bShow As Boolean) As Boolean
+    End Function
+
+    Public Function UpdateWindowEx()
+        ' SendMessage(HandleEx, &HB6, 0, 20)
+        ShowScrollBar(HandleEx, 1, True)
+        Return UpdateWindow(HandleEx)
+    End Function
+
+#End Region
+
 #Region " Properties "
+
+    Private HandleEx As IntPtr = IntPtr.Zero
+    Public ReadOnly Property ConsoleHandle As IntPtr
+        <DebuggerStepThrough>
+        Get
+            Return Me.HandleEx
+        End Get
+    End Property
 
     Private ProcessEx As Process = Nothing
     Public ReadOnly Property TargetProcess As Process
@@ -62,12 +100,23 @@ Public Class ConsoleHost : Inherits Panel
         End Get
     End Property
 
+    Private ManualWriterEx As StreamWriter = Nothing
+    Public ReadOnly Property ManualWriter As StreamWriter
+        <DebuggerStepThrough>
+        Get
+            Return Me.ManualWriterEx
+        End Get
+    End Property
+
 #End Region
 
 #Region " Declare "
 
     Private Const SW_SHOWNOACTIVATE As Integer = 4
     Private Const HWND_BOTTOM As Integer = &H1
+
+    Private Const STD_OUTPUT_HANDLE As Integer = -11
+    Private Const MY_CODE_PAGE As Integer = 437
 
 #End Region
 
@@ -102,6 +151,7 @@ Public Class ConsoleHost : Inherits Panel
                 AttachConsole(Proc.Id)
                 Loaded = SetByProcess(Proc)
 
+                HandleEx = Proc.MainWindowHandle
                 ProcessEx = Proc
 
                 Debug.WriteLine("GetConsoleWindow Failed!")
@@ -109,16 +159,60 @@ Public Class ConsoleHost : Inherits Panel
 
             Else
                 Debug.WriteLine("GetConsoleWindow Has been loaded!")
+                HandleEx = hwnd
                 Loaded = SetByHandle(hwnd)
             End If
         Else
 
+            HandleEx = TargetProcess.MainWindowHandle
             AttachConsole(TargetProcess.Id)
             Loaded = SetByProcess(TargetProcess)
 
         End If
 
+        Dim Asynctask As New Task(New Action(Async Sub()
+                                                 Dim Seconds As Integer = 1
+                                                 System.Threading.Thread.Sleep(500)
+                                                 UpdateWindowEx()
+                                             End Sub), TaskCreationOptions.PreferFairness)
+        Asynctask.Start()
+
         Return Loaded
+    End Function
+
+    Public Function Unsecure_Initialize() As Boolean
+        Try
+
+            AllocConsole()
+
+            Dim hwnd As IntPtr = GetConsoleWindow()
+            HandleEx = hwnd
+
+            Dim stdHandle As IntPtr = GetStdHandle(STD_OUTPUT_HANDLE)
+            Dim safeFileHandle As SafeFileHandle = New SafeFileHandle(stdHandle, True)
+            Dim fileStream As FileStream = New FileStream(safeFileHandle, FileAccess.Write)
+            Dim encoding As Encoding = System.Text.Encoding.GetEncoding(MY_CODE_PAGE)
+            Dim standardOutput As StreamWriter = New StreamWriter(fileStream, encoding)
+            standardOutput.AutoFlush = True
+
+            Console.SetOut(standardOutput)
+            ManualWriterEx = standardOutput
+            Debug.WriteLine("GetConsoleWindow = " & hwnd.ToString)
+
+            Dim Embed As Boolean = SetByHandle(hwnd)
+
+            Dim Asynctask As New Task(New Action(Async Sub()
+                                                     Dim Seconds As Integer = 1
+                                                     System.Threading.Thread.Sleep(500)
+                                                     UpdateWindowEx()
+                                                 End Sub), TaskCreationOptions.PreferFairness)
+            Asynctask.Start()
+
+            Return Embed
+        Catch ex As Exception
+            Debug.WriteLine("Unsecure_Initialize = " & ex.Message.ToString)
+            Return False
+        End Try
     End Function
 
 #End Region
@@ -141,6 +235,7 @@ Public Class ConsoleHost : Inherits Panel
                 End If
 
                 If SetCorrectParent = True Then
+
                     Dim placement As WINDOWPLACEMENT = GetPlacement(Proc_MainWindowHandle)
                     Debug.WriteLine("placement = " & placement.showCmd.ToString)
                     If placement.showCmd.ToString = "Normal" Then
@@ -155,14 +250,19 @@ Public Class ConsoleHost : Inherits Panel
                             Dim FakeFullSc As Boolean = FullScreenEmulation(Proc_MainWindowHandle)
                             ShowWindow(Proc_MainWindowHandle, SW_SHOWNOACTIVATE)
                             Exit For
-                        ElseIf Limit = 5 Then
+                        ElseIf Limit = 2 Then
                             Exit For
                         End If
                     End If
                 End If
+
                 System.Windows.Forms.Application.DoEvents()
+
                 i -= 1
             Next
+
+            Console.Clear()
+
             Debug.WriteLine("CosoleHost Loaded!")
             Return True
         Catch ex As Exception
@@ -170,6 +270,8 @@ Public Class ConsoleHost : Inherits Panel
             Return False
         End Try
     End Function
+
+
 
     Private Function SetByProcess(ByVal Proc As Process)
         Try
@@ -200,7 +302,7 @@ Public Class ConsoleHost : Inherits Panel
                             Dim FakeFullSc As Boolean = FullScreenEmulation(Proc.MainWindowHandle)
                             ShowWindow(Proc.MainWindowHandle, SW_SHOWNOACTIVATE)
                             Exit For
-                        ElseIf Limit = 5 Then
+                        ElseIf Limit = 2 Then
                             Exit For
                         End If
                     End If
@@ -208,7 +310,9 @@ Public Class ConsoleHost : Inherits Panel
                 System.Windows.Forms.Application.DoEvents()
                 i -= 1
             Next
+
             Debug.WriteLine("CosoleHost Loaded!")
+
             Return True
         Catch ex As Exception
             Debug.WriteLine("CosoleHost Error: " & ex.Message)
@@ -216,7 +320,7 @@ Public Class ConsoleHost : Inherits Panel
         End Try
     End Function
 
-    Public Function FullScreenEmulation(ByVal Proc_MainWindowHandle As IntPtr) As Boolean
+    Private Function FullScreenEmulation(ByVal Proc_MainWindowHandle As IntPtr) As Boolean
         Try
             Dim HWND As IntPtr = Proc_MainWindowHandle
             For i As Integer = 0 To 2
@@ -240,11 +344,15 @@ Public Class ConsoleHost : Inherits Panel
 
     Private Shared FisrsFocus As Boolean = False
 
-    Public Shared Sub BringMainWindowToFront(ByVal Proc_MainWindowHandle As IntPtr)
+    Private Sub BringMainWindowToFront(ByVal Proc_MainWindowHandle As IntPtr)
         If FisrsFocus = False Then
             SetForegroundWindow(Proc_MainWindowHandle)
             FisrsFocus = True
         End If
+    End Sub
+
+    Public Sub ActiveConsoleFocus()
+        SetForegroundWindow(HandleEx)
     End Sub
 
 #End Region
@@ -263,7 +371,7 @@ Public Class ConsoleHost : Inherits Panel
     End Function
 
     <Serializable>
-                                   <StructLayout(LayoutKind.Sequential)>
+    <StructLayout(LayoutKind.Sequential)>
     Friend Structure WINDOWPLACEMENT
         Public length As Integer
         Public flags As Integer
@@ -285,6 +393,903 @@ Public Class ConsoleHost : Inherits Panel
 End Class
 
 Namespace Win32.Helpers
+
+    ' ***********************************************************************
+    ' Author   : Elektro
+    ' Modified : 02-21-2014
+    ' ***********************************************************************
+    ' <copyright file="SendInputs.vb" company="Elektro Studios">
+    '     Copyright (c) Elektro Studios. All rights reserved.
+    ' </copyright>
+    ' ***********************************************************************
+
+#Region " Usage Examples "
+
+    'Private Sub Test() Handles Button1.Click
+
+    ' AppActivate(Process.GetProcessesByName("notepad").First.Id)
+
+    ' Dim c As Char = Convert.ToChar(Keys.Oemtilde) ' Ñ
+    ' Dim Result As Integer = SendInputs.SendKey(Convert.ToChar(c.ToString.ToLower))
+    ' MessageBox.Show(String.Format("Successfull events: {0}", CStr(Result)))
+
+    ' SendInputs.SendKey(Keys.Enter)
+    ' SendInputs.SendKey(Convert.ToChar(Keys.Back))
+    ' SendInputs.SendKeys("Hello World", True)
+    ' SendInputs.SendKey(Convert.ToChar(Keys.D0))
+    ' SendInputs.SendKeys(Keys.Insert, BlockInput:=True)
+
+    ' SendInputs.MouseClick(SendInputs.MouseButton.RightPress, False)
+    ' SendInputs.MouseMove(5, -5)
+    ' SendInputs.MousePosition(New Point(100, 500))
+
+    'End Sub
+
+#End Region
+
+    ''' <summary>
+    ''' Synthesizes keystrokes, mouse motions, and button clicks.
+    ''' </summary>
+    Public Class SendInputs
+
+#Region " P/Invoke "
+
+        Friend Class NativeMethods
+
+#Region " Methods "
+
+            ''' <summary>
+            ''' Blocks keyboard and mouse input events from reaching applications.
+            ''' For more info see here:
+            ''' http://msdn.microsoft.com/en-us/library/windows/desktop/ms646290%28v=vs.85%29.aspx
+            ''' </summary>
+            ''' <param name="fBlockIt">
+            ''' The function's purpose. 
+            ''' If this parameter is 'TRUE', keyboard and mouse input events are blocked. 
+            ''' If this parameter is 'FALSE', keyboard and mouse events are unblocked. 
+            ''' </param>
+            ''' <returns>
+            ''' If the function succeeds, the return value is nonzero.
+            ''' If input is already blocked, the return value is zero.
+            ''' </returns>
+            ''' <remarks>
+            ''' Note that only the thread that blocked input can successfully unblock input.
+            ''' </remarks>
+            <DllImport("User32.dll", CharSet:=CharSet.Auto, CallingConvention:=CallingConvention.StdCall,
+        SetLastError:=True)>
+            Friend Shared Function BlockInput(
+               ByVal fBlockIt As Boolean
+        ) As Integer
+            End Function
+
+            ''' <summary>
+            ''' Synthesizes keystrokes, mouse motions, and button clicks.
+            ''' For more info see here:
+            ''' http://msdn.microsoft.com/en-us/library/windows/desktop/ms646310%28v=vs.85%29.aspx
+            ''' </summary>
+            ''' <param name="nInputs">
+            ''' Indicates the number of structures in the pInputs array.
+            ''' </param>
+            ''' <param name="pInputs">
+            ''' Indicates an Array of 'INPUT' structures.
+            ''' Each structure represents an event to be inserted into the keyboard or mouse input stream.
+            ''' </param>
+            ''' <param name="cbSize">
+            ''' The size, in bytes, of an 'INPUT' structure.
+            ''' If 'cbSize' is not the size of an 'INPUT' structure, the function fails.
+            ''' </param>
+            ''' <returns>
+            ''' The function returns the number of events that it successfully 
+            ''' inserted into the keyboard or mouse input stream. 
+            ''' If the function returns zero, the input was already blocked by another thread.
+            ''' </returns>
+            <DllImport("user32.dll", SetLastError:=True)>
+            Friend Shared Function SendInput(
+               ByVal nInputs As Integer,
+               <MarshalAs(UnmanagedType.LPArray), [In]> ByVal pInputs As Input(),
+               ByVal cbSize As Integer
+        ) As Integer
+            End Function
+
+#End Region
+
+#Region " Enumerations "
+
+            ''' <summary>
+            ''' VirtualKey codes.
+            ''' </summary>
+            Friend Enum VirtualKeys As Short
+
+                ''' <summary>
+                ''' The Shift key.
+                ''' VK_SHIFT
+                ''' </summary>
+                SHIFT = &H10S
+
+                ''' <summary>
+                ''' The DEL key.
+                ''' VK_DELETE
+                ''' </summary>
+                DELETE = 46S
+
+                ''' <summary>
+                ''' The ENTER key.
+                ''' VK_RETURN
+                ''' </summary>
+                [RETURN] = 13S
+
+            End Enum
+
+            ''' <summary>
+            ''' The type of the input event.
+            ''' For more info see here:
+            ''' http://msdn.microsoft.com/en-us/library/windows/desktop/ms646270%28v=vs.85%29.aspx
+            ''' </summary>
+            <Description("Enumeration used for 'type' parameter of 'INPUT' structure")>
+            Friend Enum InputType As Integer
+
+                ''' <summary>
+                ''' The event is a mouse event.
+                ''' Use the mi structure of the union.
+                ''' </summary>
+                Mouse = 0
+
+                ''' <summary>
+                ''' The event is a keyboard event.
+                ''' Use the ki structure of the union.
+                ''' </summary>
+                Keyboard = 1
+
+                ''' <summary>
+                ''' The event is a hardware event.
+                ''' Use the hi structure of the union.
+                ''' </summary>
+                Hardware = 2
+
+            End Enum
+
+            ''' <summary>
+            ''' Specifies various aspects of a keystroke. 
+            ''' This member can be certain combinations of the following values. 
+            ''' For more info see here:
+            ''' http://msdn.microsoft.com/en-us/library/windows/desktop/ms646271%28v=vs.85%29.aspx
+            ''' </summary>
+            <Description("Enumeration used for 'dwFlags' parameter of 'KeyboardInput' structure")>
+            <Flags>
+            Friend Enum KeyboardInput_Flags As Integer
+
+                ''' <summary>
+                ''' If specified, the scan code was preceded by a prefix byte that has the value '0xE0' (224).
+                ''' </summary>
+                ExtendedKey = &H1
+
+                ''' <summary>
+                ''' If specified, the key is being pressed.
+                ''' </summary>
+                KeyDown = &H0
+
+                ''' <summary>
+                ''' If specified, the key is being released. 
+                ''' If not specified, the key is being pressed.
+                ''' </summary>
+                KeyUp = &H2
+
+                ''' <summary>
+                ''' If specified, 'wScan' identifies the key and 'wVk' is ignored. 
+                ''' </summary>
+                ScanCode = &H8
+
+                ''' <summary>
+                ''' If specified, the system synthesizes a 'VK_PACKET' keystroke. 
+                ''' The 'wVk' parameter must be '0'. 
+                ''' This flag can only be combined with the 'KEYEVENTF_KEYUP' flag. 
+                ''' </summary>
+                Unicode = &H4
+
+            End Enum
+
+            ''' <summary>
+            ''' A set of bit flags that specify various aspects of mouse motion and button clicks. 
+            ''' The bits in this member can be any reasonable combination of the following values. 
+            ''' For more info see here:
+            ''' http://msdn.microsoft.com/en-us/library/windows/desktop/ms646273%28v=vs.85%29.aspx
+            ''' </summary>
+            <Description("Enumeration used for 'dwFlags' parameter of 'MouseInput' structure")>
+            <Flags>
+            Friend Enum MouseInput_Flags As Integer
+
+                ''' <summary>
+                ''' The 'dx' and 'dy' members contain normalized absolute coordinates. 
+                ''' If the flag is not set, 'dx' and 'dy' contain relative data 
+                ''' (the change in position since the last reported position). 
+                ''' This flag can be set, or not set, 
+                ''' regardless of what kind of mouse or other pointing device, if any, is connected to the system. 
+                ''' </summary>
+                Absolute = &H8000I
+
+                ''' <summary>
+                ''' Movement occurred.
+                ''' </summary>
+                Move = &H1I
+
+                ''' <summary>
+                ''' The 'WM_MOUSEMOVE' messages will not be coalesced. 
+                ''' The default behavior is to coalesce 'WM_MOUSEMOVE' messages. 
+                ''' </summary>
+                Move_NoCoalesce = &H2000I
+
+                ''' <summary>
+                ''' The left button was pressed.
+                ''' </summary>
+                LeftDown = &H2I
+
+                ''' <summary>
+                ''' The left button was released.
+                ''' </summary>
+                LeftUp = &H4I
+
+                ''' <summary>
+                ''' The right button was pressed.
+                ''' </summary>
+                RightDown = &H8I
+
+                ''' <summary>
+                ''' The right button was released.
+                ''' </summary>
+                RightUp = &H10I
+
+                ''' <summary>
+                ''' The middle button was pressed.
+                ''' </summary>
+                MiddleDown = &H20I
+
+                ''' <summary>
+                ''' The middle button was released.
+                ''' </summary>
+                MiddleUp = &H40I
+
+                ''' <summary>
+                ''' Maps coordinates to the entire desktop. 
+                ''' Must be used in combination with 'Absolute'.
+                ''' </summary>
+                VirtualDesk = &H4000I
+
+                ''' <summary>
+                ''' The wheel was moved, if the mouse has a wheel. 
+                ''' The amount of movement is specified in 'mouseData'. 
+                ''' </summary>
+                Wheel = &H800I
+
+                ''' <summary>
+                ''' The wheel was moved horizontally, if the mouse has a wheel. 
+                ''' The amount of movement is specified in 'mouseData'. 
+                ''' </summary>
+                HWheel = &H1000I
+
+                ''' <summary>
+                ''' An X button was pressed.
+                ''' </summary>
+                XDown = &H80I
+
+                ''' <summary>
+                ''' An X button was released.
+                ''' </summary>
+                XUp = &H100I
+
+            End Enum
+
+#End Region
+
+#Region " Structures "
+
+            ''' <summary>
+            ''' Used by 'SendInput' function
+            ''' to store information for synthesizing input events such as keystrokes, mouse movement, and mouse clicks.
+            ''' For more info see here:
+            ''' http://msdn.microsoft.com/en-us/library/windows/desktop/ms646270%28v=vs.85%29.aspx
+            ''' </summary>
+            <Description("Structure used for 'INPUT' parameter of 'SendInput' API method")>
+            <StructLayout(LayoutKind.Explicit)>
+            Friend Structure Input
+
+                ' ******
+                '  NOTE
+                ' ******
+                ' Field offset for 32 bit machine: 4
+                ' Field offset for 64 bit machine: 8
+
+                ''' <summary>
+                ''' The type of the input event.
+                ''' </summary>
+                <FieldOffset(0)>
+                Public type As InputType
+
+                ''' <summary>
+                ''' The information about a simulated mouse event.
+                ''' </summary>
+                <FieldOffset(8)>
+                Public mi As MouseInput
+
+                ''' <summary>
+                ''' The information about a simulated keyboard event.
+                ''' </summary>
+                <FieldOffset(8)>
+                Public ki As KeyboardInput
+
+                ''' <summary>
+                ''' The information about a simulated hardware event.
+                ''' </summary>
+                <FieldOffset(8)>
+                Public hi As HardwareInput
+
+            End Structure
+
+            ''' <summary>
+            ''' Contains information about a simulated mouse event.
+            ''' For more info see here:
+            ''' http://msdn.microsoft.com/en-us/library/windows/desktop/ms646273%28v=vs.85%29.aspx
+            ''' </summary>
+            <Description("Structure used for 'mi' parameter of 'INPUT' structure")>
+            Friend Structure MouseInput
+
+                ''' <summary>
+                ''' The absolute position of the mouse, 
+                ''' or the amount of motion since the last mouse event was generated, 
+                ''' depending on the value of the dwFlags member.
+                ''' Absolute data is specified as the 'x' coordinate of the mouse; 
+                ''' relative data is specified as the number of pixels moved.
+                ''' </summary>
+                Public dx As Integer
+
+                ''' <summary>
+                ''' The absolute position of the mouse, 
+                ''' or the amount of motion since the last mouse event was generated, 
+                ''' depending on the value of the dwFlags member. 
+                ''' Absolute data is specified as the 'y' coordinate of the mouse; 
+                ''' relative data is specified as the number of pixels moved. 
+                ''' </summary>
+                Public dy As Integer
+
+                ''' <summary>
+                ''' If 'dwFlags' contains 'MOUSEEVENTF_WHEEL', 
+                ''' then 'mouseData' specifies the amount of wheel movement. 
+                ''' A positive value indicates that the wheel was rotated forward, away from the user; 
+                ''' a negative value indicates that the wheel was rotated backward, toward the user. 
+                ''' One wheel click is defined as 'WHEEL_DELTA', which is '120'.
+                ''' 
+                ''' If 'dwFlags' does not contain 'MOUSEEVENTF_WHEEL', 'MOUSEEVENTF_XDOWN', or 'MOUSEEVENTF_XUP', 
+                ''' then mouseData should be '0'. 
+                ''' </summary>
+                Public mouseData As Integer
+
+                ''' <summary>
+                ''' A set of bit flags that specify various aspects of mouse motion and button clicks. 
+                ''' The bits in this member can be any reasonable combination of the following values.
+                ''' The bit flags that specify mouse button status are set to indicate changes in status, 
+                ''' not ongoing conditions. 
+                ''' For example, if the left mouse button is pressed and held down, 
+                ''' 'MOUSEEVENTF_LEFTDOWN' is set when the left button is first pressed, 
+                ''' but not for subsequent motions. 
+                ''' Similarly, 'MOUSEEVENTF_LEFTUP' is set only when the button is first released. 
+                ''' 
+                ''' You cannot specify both the 'MOUSEEVENTF_WHEE'L flag 
+                ''' and either 'MOUSEEVENTF_XDOWN' or 'MOUSEEVENTF_XUP' flags simultaneously in the 'dwFlags' parameter, 
+                ''' because they both require use of the 'mouseData' field. 
+                ''' </summary>
+                Public dwFlags As MouseInput_Flags
+
+                ''' <summary>
+                ''' The time stamp for the event, in milliseconds. 
+                ''' If this parameter is '0', the system will provide its own time stamp. 
+                ''' </summary>
+                Public time As Integer
+
+                ''' <summary>
+                ''' An additional value associated with the mouse event. 
+                ''' An application calls 'GetMessageExtraInfo' to obtain this extra information. 
+                ''' </summary>
+                Public dwExtraInfo As IntPtr
+
+            End Structure
+
+            ''' <summary>
+            ''' Contains information about a simulated keyboard event.
+            ''' For more info see here:
+            ''' http://msdn.microsoft.com/en-us/library/windows/desktop/ms646271%28v=vs.85%29.aspx
+            ''' </summary>
+            <Description("Structure used for 'ki' parameter of 'INPUT' structure")>
+            Friend Structure KeyboardInput
+
+                ''' <summary>
+                ''' A virtual-key code. 
+                ''' The code must be a value in the range '1' to '254'. 
+                ''' If the 'dwFlags' member specifies 'KEYEVENTF_UNICODE', wVk must be '0'. 
+                ''' </summary>
+                Public wVk As Short
+
+                ''' <summary>
+                ''' A hardware scan code for the key. 
+                ''' If 'dwFlags' specifies 'KEYEVENTF_UNICODE', 
+                ''' 'wScan' specifies a Unicode character which is to be sent to the foreground application. 
+                ''' </summary>
+                Public wScan As Short
+
+                ''' <summary>
+                ''' Specifies various aspects of a keystroke.
+                ''' </summary>
+                Public dwFlags As KeyboardInput_Flags
+
+                ''' <summary>
+                ''' The time stamp for the event, in milliseconds. 
+                ''' If this parameter is '0', the system will provide its own time stamp.
+                ''' </summary>
+                Public time As Integer
+
+                ''' <summary>
+                ''' An additional value associated with the keystroke. 
+                ''' Use the 'GetMessageExtraInfo' function to obtain this information. 
+                ''' </summary>
+                Public dwExtraInfo As IntPtr
+
+            End Structure
+
+            ''' <summary>
+            ''' Contains information about a simulated message generated by an input device other than a keyboard or mouse. 
+            ''' For more info see here:
+            ''' http://msdn.microsoft.com/en-us/library/windows/desktop/ms646269%28v=vs.85%29.aspx
+            ''' </summary>
+            <Description("Structure used for 'hi' parameter of 'INPUT' structure")>
+            Friend Structure HardwareInput
+
+                ''' <summary>
+                ''' The message generated by the input hardware. 
+                ''' </summary>
+                Public uMsg As Integer
+
+                ''' <summary>
+                ''' The low-order word of the lParam parameter for uMsg. 
+                ''' </summary>
+                Public wParamL As Short
+
+                ''' <summary>
+                ''' The high-order word of the lParam parameter for uMsg. 
+                ''' </summary>
+                Public wParamH As Short
+
+            End Structure
+
+#End Region
+
+        End Class
+
+#End Region
+
+#Region " Enumerations "
+
+        ''' <summary>
+        ''' Indicates a mouse button.
+        ''' </summary>
+        <Description("Enumeration used for 'MouseAction' parameter of 'MouseClick' function.")>
+        Public Enum MouseButton As Integer
+
+            ''' <summary>
+            ''' Hold the left button.
+            ''' </summary>
+            LeftDown = &H2I
+
+            ''' <summary>
+            ''' Release the left button.
+            ''' </summary>
+            LeftUp = &H4I
+
+            ''' <summary>
+            ''' Hold the right button.
+            ''' </summary>
+            RightDown = &H8I
+
+            ''' <summary>
+            ''' Release the right button.
+            ''' </summary>
+            RightUp = &H10I
+
+            ''' <summary>
+            ''' Hold the middle button.
+            ''' </summary>
+            MiddleDown = &H20I
+
+            ''' <summary>
+            ''' Release the middle button.
+            ''' </summary>
+            MiddleUp = &H40I
+
+            ''' <summary>
+            ''' Press the left button.
+            ''' ( Hold + Release )
+            ''' </summary>
+            LeftPress = LeftDown + LeftUp
+
+            ''' <summary>
+            ''' Press the Right button.
+            ''' ( Hold + Release )
+            ''' </summary>
+            RightPress = RightDown + RightUp
+
+            ''' <summary>
+            ''' Press the Middle button.
+            ''' ( Hold + Release )
+            ''' </summary>
+            MiddlePress = MiddleDown + MiddleUp
+
+        End Enum
+
+#End Region
+
+#Region " Public Methods "
+
+        ''' <summary>
+        ''' Sends a keystroke.
+        ''' </summary>
+        ''' <param name="key">
+        ''' Indicates the keystroke to simulate.
+        ''' </param>
+        ''' <param name="BlockInput">
+        ''' If set to <c>true</c>, the keyboard and mouse are blocked until the keystroke is sent.
+        ''' </param>
+        ''' <returns>
+        ''' The function returns the number of events that it successfully inserted into the keyboard input stream. 
+        ''' If the function returns zero, the input was already blocked by another thread.
+        ''' </returns>
+        Public Shared Function SendKey(ByVal key As Char,
+                                   Optional BlockInput As Boolean = False) As Integer
+
+            ' Block Keyboard and mouse.
+            If BlockInput Then NativeMethods.BlockInput(True)
+
+            ' The inputs structures to send.
+            Dim Inputs As New List(Of NativeMethods.Input)
+
+            ' The current input to add into the Inputs list.
+            Dim CurrentInput As New NativeMethods.Input
+
+            ' Determines whether a character is an alphabetic letter.
+            Dim IsAlphabetic As Boolean = Not (key.ToString.ToUpper = key.ToString.ToLower)
+
+            ' Determines whether a character is an uppercase alphabetic letter.
+            Dim IsUpperCase As Boolean =
+            (key.ToString = key.ToString.ToUpper) AndAlso Not (key.ToString.ToUpper = key.ToString.ToLower)
+
+            ' Determines whether the CapsLock key is pressed down.
+            Dim CapsLockON As Boolean = My.Computer.Keyboard.CapsLock
+
+            ' Set the passed key to upper-case.
+            If IsAlphabetic AndAlso Not IsUpperCase Then
+                key = Convert.ToChar(key.ToString.ToUpper)
+            End If
+
+            ' If character is alphabetic and is UpperCase and CapsLock is pressed down,
+            ' OrElse character is alphabetic and is not UpperCase and CapsLock is not pressed down,
+            ' OrElse character is not alphabetic.
+            If (IsAlphabetic AndAlso IsUpperCase AndAlso CapsLockON) _
+        OrElse (IsAlphabetic AndAlso Not IsUpperCase AndAlso Not CapsLockON) _
+        OrElse (Not IsAlphabetic) Then
+
+                ' Hold the character key.
+                With CurrentInput
+                    .type = NativeMethods.InputType.Keyboard
+                    .ki.wVk = Convert.ToInt16(CChar(key))
+                    .ki.dwFlags = NativeMethods.KeyboardInput_Flags.KeyDown
+                End With : Inputs.Add(CurrentInput)
+
+                ' Release the character key.
+                With CurrentInput
+                    .type = NativeMethods.InputType.Keyboard
+                    .ki.wVk = Convert.ToInt16(CChar(key))
+                    .ki.dwFlags = NativeMethods.KeyboardInput_Flags.KeyUp
+                End With : Inputs.Add(CurrentInput)
+
+                ' If character is alphabetic and is UpperCase and CapsLock is not pressed down,
+                ' OrElse character is alphabetic and is not UpperCase and CapsLock is pressed down.
+            ElseIf (IsAlphabetic AndAlso IsUpperCase AndAlso Not CapsLockON) _
+        OrElse (IsAlphabetic AndAlso Not IsUpperCase AndAlso CapsLockON) Then
+
+                ' Hold the Shift key.
+                With CurrentInput
+                    .type = NativeMethods.InputType.Keyboard
+                    .ki.wVk = NativeMethods.VirtualKeys.SHIFT
+                    .ki.dwFlags = NativeMethods.KeyboardInput_Flags.KeyDown
+                End With : Inputs.Add(CurrentInput)
+
+                ' Hold the character key.
+                With CurrentInput
+                    .type = NativeMethods.InputType.Keyboard
+                    .ki.wVk = Convert.ToInt16(CChar(key))
+                    .ki.dwFlags = NativeMethods.KeyboardInput_Flags.KeyDown
+                End With : Inputs.Add(CurrentInput)
+
+                ' Release the character key.
+                With CurrentInput
+                    .type = NativeMethods.InputType.Keyboard
+                    .ki.wVk = Convert.ToInt16(CChar(key))
+                    .ki.dwFlags = NativeMethods.KeyboardInput_Flags.KeyUp
+                End With : Inputs.Add(CurrentInput)
+
+                ' Release the Shift key.
+                With CurrentInput
+                    .type = NativeMethods.InputType.Keyboard
+                    .ki.wVk = NativeMethods.VirtualKeys.SHIFT
+                    .ki.dwFlags = NativeMethods.KeyboardInput_Flags.KeyUp
+                End With : Inputs.Add(CurrentInput)
+
+            End If ' UpperCase And My.Computer.Keyboard.CapsLock is...
+
+            ' Send the input key.
+            Return NativeMethods.SendInput(Inputs.Count, Inputs.ToArray,
+                                       Marshal.SizeOf(GetType(NativeMethods.Input)))
+
+            ' Unblock Keyboard and mouse.
+            If BlockInput Then NativeMethods.BlockInput(False)
+
+        End Function
+
+        ''' <summary>
+        ''' Sends a keystroke.
+        ''' </summary>
+        ''' <param name="key">
+        ''' Indicates the keystroke to simulate.
+        ''' </param>
+        ''' <param name="BlockInput">
+        ''' If set to <c>true</c>, the keyboard and mouse are blocked until the keystroke is sent.
+        ''' </param>
+        ''' <returns>
+        ''' The function returns the number of events that it successfully inserted into the keyboard input stream. 
+        ''' If the function returns zero, the input was already blocked by another thread.
+        ''' </returns>
+        Public Shared Function SendKey(ByVal key As Keys,
+                                   Optional BlockInput As Boolean = False) As Integer
+
+            Return SendKey(Convert.ToChar(key), BlockInput)
+
+        End Function
+
+        ''' <summary>
+        ''' Sends a string.
+        ''' </summary>
+        ''' <param name="String">
+        ''' Indicates the string to send.
+        ''' </param>
+        ''' <param name="BlockInput">
+        ''' If set to <c>true</c>, the keyboard and mouse are blocked until the keystroke is sent.
+        ''' </param>
+        ''' <returns>
+        ''' The function returns the number of events that it successfully inserted into the keyboard input stream. 
+        ''' If the function returns zero, the input was already blocked by another thread.
+        ''' </returns>
+        Public Shared Function SendKeys(ByVal [String] As String,
+                                    Optional BlockInput As Boolean = False) As Integer
+
+            Dim SuccessCount As Integer = 0
+
+            ' Block Keyboard and mouse.
+            If BlockInput Then NativeMethods.BlockInput(True)
+
+            For Each c As Char In [String]
+                SuccessCount += SendKey(c, BlockInput:=False)
+            Next c
+
+            ' Unblock Keyboard and mouse.
+            If BlockInput Then NativeMethods.BlockInput(False)
+
+            Return SuccessCount
+
+        End Function
+
+        ''' <summary>
+        ''' Slices the mouse position.
+        ''' </summary>
+        ''' <param name="Offset">
+        ''' Indicates the offset, in coordinates.
+        ''' </param>
+        ''' <param name="BlockInput">
+        ''' If set to <c>true</c>, the keyboard and mouse are blocked until the mouse movement is sent.
+        ''' </param>
+        ''' <returns>
+        ''' The function returns the number of events that it successfully inserted into the mouse input stream. 
+        ''' If the function returns zero, the input was already blocked by another thread.
+        ''' </returns>
+        Public Shared Function MouseMove(ByVal Offset As Point,
+                                     Optional BlockInput As Boolean = False) As Integer
+
+            ' Block Keyboard and mouse.
+            If BlockInput Then NativeMethods.BlockInput(True)
+
+            ' The inputs structures to send.
+            Dim Inputs As New List(Of NativeMethods.Input)
+
+            ' The current input to add into the Inputs list.
+            Dim CurrentInput As New NativeMethods.Input
+
+            ' Add a mouse movement.
+            With CurrentInput
+                .type = NativeMethods.InputType.Mouse
+                .mi.dx = Offset.X
+                .mi.dy = Offset.Y
+                .mi.dwFlags = NativeMethods.MouseInput_Flags.Move
+            End With : Inputs.Add(CurrentInput)
+
+            ' Send the mouse movement.
+            Return NativeMethods.SendInput(Inputs.Count, Inputs.ToArray,
+                                       Marshal.SizeOf(GetType(NativeMethods.Input)))
+
+            ' Unblock Keyboard and mouse.
+            If BlockInput Then NativeMethods.BlockInput(False)
+
+        End Function
+
+        ''' <summary>
+        ''' Slices the mouse position.
+        ''' </summary>
+        ''' <param name="X">
+        ''' Indicates the 'X' offset.
+        ''' </param>
+        ''' <param name="Y">
+        ''' Indicates the 'Y' offset.
+        ''' </param>
+        ''' <param name="BlockInput">
+        ''' If set to <c>true</c>, the keyboard and mouse are blocked until the mouse movement is sent.
+        ''' </param>
+        ''' <returns>
+        ''' The function returns the number of events that it successfully inserted into the mouse input stream. 
+        ''' If the function returns zero, the input was already blocked by another thread.
+        ''' </returns>
+        Public Shared Function MouseMove(ByVal X As Integer, ByVal Y As Integer,
+                                     Optional BlockInput As Boolean = False) As Integer
+
+            Return MouseMove(New Point(X, Y), BlockInput)
+
+        End Function
+
+        ''' <summary>
+        ''' Moves the mouse hotspot to an absolute position, in coordinates.
+        ''' </summary>
+        ''' <param name="Position">
+        ''' Indicates the absolute position.
+        ''' </param>
+        ''' <param name="BlockInput">
+        ''' If set to <c>true</c>, the keyboard and mouse are blocked until the mouse movement is sent.
+        ''' </param>
+        ''' <returns>
+        ''' The function returns the number of events that it successfully inserted into the mouse input stream. 
+        ''' If the function returns zero, the input was already blocked by another thread.
+        ''' </returns>
+        Public Shared Function MousePosition(ByVal Position As Point,
+                                         Optional BlockInput As Boolean = False) As Integer
+
+            ' Block Keyboard and mouse.
+            If BlockInput Then NativeMethods.BlockInput(True)
+
+            ' The inputs structures to send.
+            Dim Inputs As New List(Of NativeMethods.Input)
+
+            ' The current input to add into the Inputs list.
+            Dim CurrentInput As New NativeMethods.Input
+
+            ' Transform the coordinates.
+            Position.X = CInt(Position.X * 65535 / (Screen.PrimaryScreen.Bounds.Width - 1))
+            Position.Y = CInt(Position.Y * 65535 / (Screen.PrimaryScreen.Bounds.Height - 1))
+
+            ' Add an absolute mouse movement.
+            With CurrentInput
+                .type = NativeMethods.InputType.Mouse
+                .mi.dx = Position.X
+                .mi.dy = Position.Y
+                .mi.dwFlags = NativeMethods.MouseInput_Flags.Absolute Or NativeMethods.MouseInput_Flags.Move
+                .mi.time = 0
+            End With : Inputs.Add(CurrentInput)
+
+            ' Send the absolute mouse movement.
+            Return NativeMethods.SendInput(Inputs.Count, Inputs.ToArray,
+                                       Marshal.SizeOf(GetType(NativeMethods.Input)))
+
+            ' Unblock Keyboard and mouse.
+            If BlockInput Then NativeMethods.BlockInput(False)
+
+        End Function
+
+        ''' <summary>
+        ''' Moves the mouse hotspot to an absolute position, in coordinates.
+        ''' </summary>
+        ''' <param name="X">
+        ''' Indicates the absolute 'X' coordinate.
+        ''' </param>
+        ''' <param name="Y">
+        ''' Indicates the absolute 'Y' coordinate.
+        ''' </param>
+        ''' <param name="BlockInput">
+        ''' If set to <c>true</c>, the keyboard and mouse are blocked until the mouse movement is sent.
+        ''' </param>
+        ''' <returns>
+        ''' The function returns the number of events that it successfully inserted into the mouse input stream. 
+        ''' If the function returns zero, the input was already blocked by another thread.
+        ''' </returns>
+        Public Shared Function MousePosition(ByVal X As Integer, ByVal Y As Integer,
+                                         Optional BlockInput As Boolean = False) As Integer
+
+            Return MousePosition(New Point(X, Y), BlockInput)
+
+        End Function
+
+        ''' <summary>
+        ''' Simulates a mouse click.
+        ''' </summary>
+        ''' <param name="MouseAction">
+        ''' Indicates the mouse action to perform.
+        ''' </param>
+        ''' <param name="BlockInput">
+        ''' If set to <c>true</c>, the keyboard and mouse are blocked until the mouse movement is sent.
+        ''' </param>
+        ''' <returns>
+        ''' The function returns the number of events that it successfully inserted into the mouse input stream. 
+        ''' If the function returns zero, the input was already blocked by another thread.
+        ''' </returns>
+        Public Shared Function MouseClick(ByVal MouseAction As MouseButton,
+                                      Optional BlockInput As Boolean = False) As Integer
+
+            ' Block Keyboard and mouse.
+            If BlockInput Then NativeMethods.BlockInput(True)
+
+            ' The inputs structures to send.
+            Dim Inputs As New List(Of NativeMethods.Input)
+
+            ' The current input to add into the Inputs list.
+            Dim CurrentInput As New NativeMethods.Input
+
+            ' The mouse actions to perform.
+            Dim MouseActions As New List(Of MouseButton)
+
+            Select Case MouseAction
+
+                Case MouseButton.LeftPress ' Left button, hold and release.
+                    MouseActions.Add(MouseButton.LeftDown)
+                    MouseActions.Add(MouseButton.LeftUp)
+
+                Case MouseButton.RightPress ' Right button, hold and release.
+                    MouseActions.Add(MouseButton.RightDown)
+                    MouseActions.Add(MouseButton.RightUp)
+
+                Case MouseButton.MiddlePress ' Middle button, hold and release.
+                    MouseActions.Add(MouseButton.MiddleDown)
+                    MouseActions.Add(MouseButton.MiddleUp)
+
+                Case Else ' Other
+                    MouseActions.Add(MouseAction)
+
+            End Select ' MouseAction
+
+            For Each Action As MouseButton In MouseActions
+
+                ' Add the mouse click.
+                With CurrentInput
+                    .type = NativeMethods.InputType.Mouse
+                    '.mi.dx = Offset.X
+                    '.mi.dy = Offset.Y
+                    .mi.dwFlags = Action
+                End With : Inputs.Add(CurrentInput)
+
+            Next Action
+
+            ' Send the mouse click.
+            Return NativeMethods.SendInput(Inputs.Count, Inputs.ToArray,
+                                       Marshal.SizeOf(GetType(NativeMethods.Input)))
+
+            ' Unblock Keyboard and mouse.
+            If BlockInput Then NativeMethods.BlockInput(False)
+
+        End Function
+
+#End Region
+
+    End Class
+
     Public NotInheritable Class SetWindowStyle
         ' ***********************************************************************
         ' Author           : Destroyer
@@ -321,11 +1326,11 @@ Namespace Win32.Helpers
             ''' If this parameter is NULL, all window names match.</param>
             ''' <returns>If the function succeeds, the return value is a handle to the window that has the specified class name and window name.
             ''' If the function fails, the return value is NULL.</returns>
-                                       <DllImport("user32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
+            <DllImport("user32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
             Friend Shared Function FindWindow(
-               ByVal lpClassName As String,
-               ByVal lpWindowName As String
-            ) As IntPtr
+ByVal lpClassName As String,
+ByVal lpWindowName As String
+) As IntPtr
             End Function
 
             ''' <summary>
@@ -356,13 +1361,13 @@ Namespace Win32.Helpers
             ''' If the function succeeds, the return value is a handle to the window that has the specified class and window names.
             ''' If the function fails, the return value is NULL.
             ''' </returns>
-                                           <DllImport("User32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
+            <DllImport("User32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
             Friend Shared Function FindWindowEx(
-               ByVal hwndParent As IntPtr,
-               ByVal hwndChildAfter As IntPtr,
-               ByVal strClassName As String,
-               ByVal strWindowName As String
-            ) As IntPtr
+ByVal hwndParent As IntPtr,
+ByVal hwndChildAfter As IntPtr,
+ByVal strClassName As String,
+ByVal strWindowName As String
+) As IntPtr
             End Function
 
             ''' <summary>
@@ -377,11 +1382,11 @@ Namespace Win32.Helpers
             ''' otherwise, it does not.
             ''' </param>
             ''' <returns>The identifier of the thread that created the window.</returns>
-                                               <DllImport("user32.dll")>
+            <DllImport("user32.dll")>
             Friend Shared Function GetWindowThreadProcessId(
-                ByVal hWnd As IntPtr,
-                ByRef ProcessId As Integer
-            ) As Integer
+ByVal hWnd As IntPtr,
+ByRef ProcessId As Integer
+) As Integer
             End Function
 
             <System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint:="SetWindowLong")>
@@ -614,11 +1619,11 @@ Namespace Win32.Helpers
             ''' If this parameter is NULL, all window names match.</param>
             ''' <returns>If the function succeeds, the return value is a handle to the window that has the specified class name and window name.
             ''' If the function fails, the return value is NULL.</returns>
-                                                                               <DllImport("user32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
+            <DllImport("user32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
             Friend Shared Function FindWindow(
-               ByVal lpClassName As String,
-               ByVal lpWindowName As String
-            ) As IntPtr
+ByVal lpClassName As String,
+ByVal lpWindowName As String
+) As IntPtr
             End Function
 
             ''' <summary>
@@ -649,13 +1654,13 @@ Namespace Win32.Helpers
             ''' If the function succeeds, the return value is a handle to the window that has the specified class and window names.
             ''' If the function fails, the return value is NULL.
             ''' </returns>
-                                                                                   <DllImport("User32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
+            <DllImport("User32.dll", SetLastError:=False, CharSet:=CharSet.Auto, BestFitMapping:=False)>
             Friend Shared Function FindWindowEx(
-               ByVal hwndParent As IntPtr,
-               ByVal hwndChildAfter As IntPtr,
-               ByVal strClassName As String,
-               ByVal strWindowName As String
-            ) As IntPtr
+ByVal hwndParent As IntPtr,
+ByVal hwndChildAfter As IntPtr,
+ByVal strClassName As String,
+ByVal strWindowName As String
+) As IntPtr
             End Function
 
             ''' <summary>
@@ -670,11 +1675,11 @@ Namespace Win32.Helpers
             ''' otherwise, it does not.
             ''' </param>
             ''' <returns>The identifier of the thread that created the window.</returns>
-                                                                                       <DllImport("user32.dll")>
+            <DllImport("user32.dll")>
             Friend Shared Function GetWindowThreadProcessId(
-                ByVal hWnd As IntPtr,
-                ByRef ProcessId As Integer
-            ) As Integer
+ByVal hWnd As IntPtr,
+ByRef ProcessId As Integer
+) As Integer
             End Function
 
             ''' <summary>
@@ -684,11 +1689,11 @@ Namespace Win32.Helpers
             ''' <param name="hwnd">A handle to the window.</param>
             ''' <param name="nCmdShow">Controls how the window is to be shown.</param>
             ''' <returns><c>true</c> if the function succeeds, <c>false</c> otherwise.</returns>
-                                                                                           <DllImport("User32", SetLastError:=False)>
+            <DllImport("User32", SetLastError:=False)>
             Friend Shared Function ShowWindow(
-               ByVal hwnd As IntPtr,
-               ByVal nCmdShow As WindowState
-            ) As Boolean
+ByVal hwnd As IntPtr,
+ByVal nCmdShow As WindowState
+) As Boolean
             End Function
 
 #End Region
