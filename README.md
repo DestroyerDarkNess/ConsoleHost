@@ -14,6 +14,29 @@ You can also customize the process to be Hosted using the TargetProcess property
 
 ![Preview](https://i.ibb.co/pJhbLk8/ss2.png)
 
+## Known issues :
+
+On some computers for some reason it does not write the Console.Writeline method. For this problem, it has been created in Start method:
+```vb
+ConsoleHost1.Unsecure_Initialize ()
+```
+And you should write to the console, calling:
+```vb
+ConsoleHost1.ManualWriter.WriteLine ()
+```
+
+<hr style="background-color:blue;"></hr>
+
+If the problem persists follow the steps below:
+
+Enabling native code debugging redirects the console to the Output window. However, regardless of the native code debugging settings, I saw absolutely no results in any of the places until I enabled the Visual Studio hosting process.
+
+This could have been the reason why simply disabling native code debugging didn't solve your problem.
+
+  Go to Project Properties -> Debug -> Enable Debuggers and make sure 'Enable Visual Studio Hosting Process' is checked.
+
+Also enabling "Sql Server Debugging" prevents the console from working, make sure it is disabled.
+
 ## Possible uses
 
 - Custom CMD For script loading projects, Possibly you can create your own Script language and want to use ConsoleHost.
