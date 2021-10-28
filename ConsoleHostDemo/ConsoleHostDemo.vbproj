@@ -72,7 +72,7 @@
     <Import Include="System.Threading.Tasks" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ConsoleHost.vb">
+    <Compile Include="ConsoleHostV2.vb">
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Form1.vb">
