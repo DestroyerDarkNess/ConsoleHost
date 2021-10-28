@@ -18,11 +18,7 @@ You can also customize the process to be Hosted using the TargetProcess property
 
 On some computers for some reason it does not write the Console.Writeline method. For this problem, it has been created in Start method:
 ```vb
-ConsoleHost1.Unsecure_Initialize ()
-```
-And you should write to the console, calling:
-```vb
-ConsoleHost1.ManualWriter.WriteLine ()
+ConsoleHost1.Unsecure_Initialize()
 ```
 
 <hr style="background-color:blue;"></hr>
