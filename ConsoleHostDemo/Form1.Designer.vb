@@ -61,7 +61,7 @@ Partial Class Form1
         Me.Button2.Name = "Button2"
         Me.Button2.Size = New System.Drawing.Size(80, 26)
         Me.Button2.TabIndex = 4
-        Me.Button2.Text = "TestClolor"
+        Me.Button2.Text = "TestColor"
         Me.Button2.UseVisualStyleBackColor = True
         '
         'ConsoleHostV21
