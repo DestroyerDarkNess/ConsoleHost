@@ -1,9 +1,9 @@
 # ConsoleHost
-ConsoleHost control / Embed Console In Winform Project .
-Remember to leave your Star to the Project! Thank you!
+ConsoleHost control / Embed Console In WinForms Project.
+Remember to leave a Star to the Project! Thank you!
 
 ## Introduction
-ControlHost allows you to enter a console as if it were a Winform control.
+ControlHost allows you to enter a console as if it was a WinForms control.
 By default it loads a basic console. If the load fails, The plugin loads a HOST CMD.
 
 You can also customize the process to be Hosted using the TargetProcess property of the control.
@@ -33,7 +33,7 @@ This could have been the reason why simply disabling native code debugging didn'
 
 Also enabling "Sql Server Debugging" prevents the console from working, make sure it is disabled.
 
-## Possible uses
+## Possible Uses
 
 - Custom CMD For script loading projects, Possibly you can create your own Script language and want to use ConsoleHost.
 - Custom development of Debuggers with console design.
